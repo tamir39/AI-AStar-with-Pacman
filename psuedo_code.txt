@@ -1,0 +1,189 @@
+class Pacman
+    attributes:
+        position: current position of Pacman
+        map: 2D grid representing the game map
+        goals: list of goal positions
+
+    method SEARCH()
+        expanded ← empty set
+        path ← empty list
+        relationship ← empty dictionary
+        frontier ← priority queue
+
+        start ← new State(map, position, goals, 0, 0, None, [], preHeuristic())
+        push (start.f(), start) into frontier
+
+        while frontier is not empty:
+            (_, state) ← frontier.pop()
+
+            if state in expanded:
+                continue
+            
+            add state to expanded
+
+            if state has no remaining goals:
+                goal ← state
+                break
+
+            for each next_state in state.getNextState():
+                push (next_state.f(), next_state) into frontier
+                if next_state is not in relationship:
+                    relationship[next_state] ← state
+
+        review ← goal
+        while review in relationship:
+            append review to path
+            review ← relationship[review]
+
+        reverse path
+        return path
+
+    method BFS_DISTANCE(grid, start, goal)
+        rows, cols ← dimensions of grid
+        queue ← [(start.x, start.y, 0, 0)]
+        visited ← set containing (start.x, start.y, 0)
+
+        directions ← [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        corners ← dictionary mapping each corner to its opposite
+
+        while queue is not empty:
+            (x, y, step, power) ← queue.pop_front()
+            if (x, y) equals goal:
+                return step
+
+            if (x, y) is a teleport corner:
+                (teleport_x, teleport_y) ← corners[(x, y)]
+                append (teleport_x, teleport_y, step + 1, max(power - 1, 0)) to queue
+                add (teleport_x, teleport_y, max(power - 1, 0)) to visited
+            
+            for each (dx, dy) in directions:
+                (nx, ny) ← (x + dx, y + dy)
+                if (nx, ny) is within grid bounds:
+                    if grid[nx][ny] is not wall or power > 0:
+                        new_power ← max(power - 1, 0) if grid[nx][ny] is wall else power
+                        if grid[nx][ny] is power-up:
+                            new_power ← 5
+                        if (nx, ny, new_power) is not in visited:
+                            add (nx, ny, new_power) to visited
+                            append (nx, ny, step + 1, new_power) to queue
+
+    method HEURISTIC_OF_THE_PATH(map, position, goals)
+        if goals is empty:
+            return 0
+        
+        total_cost ← 0
+        current_pos ← position
+        remaining_goals ← set(goals)
+
+        while remaining_goals is not empty:
+            nearest_goal ← goal in remaining_goals with minimum bfs_distance(map, current_pos, goal)
+            cost ← bfs_distance(map, current_pos, nearest_goal)
+            if cost is infinite:
+                return infinite
+            total_cost ← total_cost + cost
+            current_pos ← nearest_goal
+            remove nearest_goal from remaining_goals
+
+        return total_cost
+
+    method PREHEURISTIC()
+        pre_heuristic ← empty dictionary
+        goals_copy ← deep copy of goals
+
+        for each goal g in goals_copy:
+            remaining_goals ← all goals except g
+
+            for i from 1 to length of remaining_goals:
+                for each subset each of size i in combinations of remaining_goals:
+                    formatted_each ← tuple(each) if size of each is 1 else each
+                    pre_heuristic[(g, formatted_each)] ← heuristic_of_the_path(map, g, list(each))
+
+        return pre_heuristic
+
+class State
+    attributes:
+        map: 2D grid representing the game map
+        position: current position of the state
+        goals: list of remaining goals
+        step: number of steps taken
+        power: current power level
+        action: last action taken
+        explored: list of previously visited positions
+        pre_heuristic: precomputed heuristic values
+
+    method INITIALIZE(map, position, goals, step, power, action, explored, pre_heuristic)
+        self.map ← deep copy of map
+        self.goals ← deep copy of goals
+        self.explored ← deep copy of explored
+        self.pre_heuristic ← deep copy of pre_heuristic
+
+        self.position ← position
+        self.step ← step
+        self.power ← power
+        self.action ← action
+
+        if self.position is in self.goals:
+            remove self.position from self.goals
+            clear self.explored
+
+    method GET_NEXT_STATE()
+        p ← self.position
+        m ← self.map
+        g ← self.goals
+        e ← self.explored
+        states ← empty list
+        num_rows ← number of rows in map
+        num_cols ← number of columns in map
+        directions ← [(−1, 0, "North"), (1, 0, "South"), (0, −1, "West"), (0, 1, "East")]
+
+        if m[p.x][p.y] is "O":
+            self.power ← 5
+            m[p.x][p.y] ← " "
+
+        if self.IS_CORNER(p):
+            o_c ← self.OPPOSITE_CORNER(p)
+
+            if length of e > 0 and not self.IS_CORNER(e[-1]):
+                return [new State(m, o_c, g, self.step, self.power, "Teleport", e + [p], self.pre_heuristic)]
+            else:
+                append new State(m, o_c, g, self.step + 1, max(self.power − 1, 0), "Stop", e + [p], self.pre_heuristic) to states
+
+        if self.power > 0:
+            for each (dx, dy, action) in directions:
+                neighbor ← (p.x + dx, p.y + dy)
+                if 1 ≤ neighbor.x < num_rows − 1 and 1 ≤ neighbor.y < num_cols − 1 and neighbor not in e:
+                    append new State(m, neighbor, g, self.step + 1, self.power − 1, action, e + [p], self.pre_heuristic) to states
+            return states
+
+        for each (dx, dy, action) in directions:
+            neighbor ← (p.x + dx, p.y + dy)
+            if m[neighbor.x][neighbor.y] is not "%" and 1 ≤ neighbor.x < num_rows − 1 and 1 ≤ neighbor.y < num_cols − 1 and neighbor not in e:
+                append new State(m, neighbor, g, self.step + 1, 0, action, e + [p], self.pre_heuristic) to states
+
+        return states
+
+    method F()
+        (h, goal) ← self.FIND_NEAREST_GOAL()
+        goals ← tuple of g in self.goals where g is not goal
+        
+        heuristic ← h + self.pre_heuristic.get((goal, goals), 0)
+        return self.step + heuristic
+
+    method FIND_NEAREST_GOAL()
+        if self.goals is empty:
+            return (0, None)
+
+        p ← self.position
+        corners ← [(1, 1), (1, num_cols − 2), (num_rows − 2, 1), (num_rows − 2, num_cols − 2)]
+
+        (h1, goal1) ← minimum (manhattan_distance(p, each), each) for each in self.goals
+
+        teleport_options ← empty list
+        for each (c, opposite_c) in zip(corners, reversed(corners)):
+            (h2, goal2) ← minimum (manhattan_distance(c, p) + manhattan_distance(opposite_c, each), each) for each in self.goals
+            append (h2, goal2) to teleport_options
+
+        (h_min, goal_min) ← minimum of [(h1, goal1)] + teleport_options by heuristic value
+
+        return (h_min, goal_min)
+
