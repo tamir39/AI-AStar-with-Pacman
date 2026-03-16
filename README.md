@@ -6,3 +6,12 @@
   - Power Pellets (O): Collecting these allows Pacman to move through walls (%) for a limited duration (5 steps).
 - Advanced Heuristics: Includes a pre-calculated distance matrix and BFS-based path estimation to guide the search efficiently.
 - Interactive Visualization: A Pygame-based GUI that animates Pacman’s movement, displays current actions (North, South, East, West, Teleport), and calculates the final path cost.
+## How It Works
+- Map Loading: The map is read from a .txt file where P is the start, . are goals, % are walls, and O are power-ups.
+- State Representation: Each State object tracks Pacman's position, remaining goals, current power-up status, and the history of explored nodes.
+- Pathfinding: The search method explores the grid, considering both standard movement and the "cost-benefit" of using teleports or breaking through walls.
+- Animation: Once the optimal path is found, Pygame renders the map and animates Pacman's journey step-by-step.
+## Setup
+- Dependencies: pygame
+- Execution: Run the script and click the "Start" button in the GUI to begin the visualization.
+- Map Configuration: Ensure task02_pacman_example_map.txt is in the same directory as the script.
